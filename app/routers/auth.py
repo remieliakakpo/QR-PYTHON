@@ -10,14 +10,12 @@ router = APIRouter()
 
 @router.post("/register", response_model=TokenResponse)
 def register(data: UserRegister, db: Session = Depends(get_db)):
-    # Vérifier si email existe déjà
-    if db.query(User).filter(User.email == data.email).first():
-        raise HTTPException(status_code=400, detail="Cet email est déjà utilisé")
+    # Vérifier si téléphone existe déjà
+    if db.query(User).filter(User.phone == data.phone).first():
+        raise HTTPException(status_code=400, detail="Ce numéro est déjà utilisé")
 
-    # Créer l'utilisateur
     user = User(
         id=str(uuid.uuid4()),
-        email=data.email,
         phone=data.phone,
         password=hash_password(data.password),
     )
@@ -30,9 +28,9 @@ def register(data: UserRegister, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=TokenResponse)
 def login(data: UserLogin, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == data.email).first()
+    user = db.query(User).filter(User.phone == data.phone).first()
     if not user or not verify_password(data.password, user.password):
-        raise HTTPException(status_code=401, detail="Email ou mot de passe incorrect")
+        raise HTTPException(status_code=401, detail="Numéro ou mot de passe incorrect")
 
     token = create_token(user.id)
     return {"message": "Connexion réussie", "token": token, "user": user}

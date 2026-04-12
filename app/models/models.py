@@ -10,15 +10,13 @@ def generate_uuid():
 class User(Base):
     __tablename__ = "users"
 
-    id = Column(String, primary_key=True, default=generate_uuid)
-    email = Column(String, unique=True, nullable=False)
-    phone = Column(String, unique=True, nullable=False)
-    password = Column(String, nullable=False)
+    id         = Column(String, primary_key=True, default=generate_uuid)
+    phone      = Column(String, unique=True, nullable=False)
+    password   = Column(String, nullable=False)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
     profile = relationship("Profile", back_populates="user", uselist=False)
-
 
 class Profile(Base):
     __tablename__ = "profiles"

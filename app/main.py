@@ -6,7 +6,7 @@ from app.models import models
 
 models.Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="MediQR API", version="1.0.0")
+app = FastAPI(title="SafeLife", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -21,4 +21,4 @@ app.include_router(scan.router, prefix="/scan", tags=["scan"])
 
 @app.get("/")
 def root():
-    return {"message": "MediQR API fonctionne !", "version": "1.0.0"}
+    return {"message": "SafeLife API fonctionne !", "version": "1.0.0"}
