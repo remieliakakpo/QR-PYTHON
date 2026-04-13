@@ -11,7 +11,7 @@ class User(Base):
     __tablename__ = "users"
 
     id         = Column(String, primary_key=True, default=generate_uuid)
-    phone      = Column(String, unique=True, nullable=False)
+    phone      = Column(String, unique=True, index=True, nullable=False)
     password   = Column(String, nullable=False)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
@@ -31,8 +31,8 @@ class Profile(Base):
     birth_date = Column(String, nullable=False)
     gender = Column(String, nullable=False)
     nationality = Column(String, nullable=False)
-    document_type = Column(String, nullable=False)
-    document_number = Column(String, nullable=False)
+    document_type = Column(String, nullable=True)
+    document_number = Column(String, nullable=True)
     photo_uri = Column(String, nullable=True)
 
     # Médical
