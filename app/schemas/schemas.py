@@ -1,3 +1,5 @@
+from pydantic import BaseModel, EmailStr
+from typing import Optional, List
 # ─── Profil ───
 class ProfileCreate(BaseModel):
     profile_type: str = "adult"
