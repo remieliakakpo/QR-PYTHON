@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Boolean, Float, DateTime, ForeignKey
+from sqlalchemy import Column, String, Boolean, Float, DateTime, ForeignKey, Integer
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.utils.database import Base
@@ -7,6 +7,7 @@ import uuid
 def generate_uuid():
     return str(uuid.uuid4())
 
+# --- UTILISATEUR & AUTH ---
 class User(Base):
     __tablename__ = "users"
 
@@ -18,11 +19,13 @@ class User(Base):
 
     profile = relationship("Profile", back_populates="user", uselist=False)
 
+# --- PROFIL MÉDICAL ---
 class Profile(Base):
     __tablename__ = "profiles"
 
     id = Column(String, primary_key=True, default=generate_uuid)
     qr_token = Column(String, unique=True, default=generate_uuid)
+    access_code = Column(String, nullable=True, default="1234")
     profile_type = Column(String, nullable=False)
 
     # Identité
@@ -43,7 +46,7 @@ class Profile(Base):
     surgeries = Column(String, nullable=True)
     disabilities = Column(String, nullable=True)
 
-    # École
+    # École / Travail
     school_name = Column(String, nullable=True)
     class_name = Column(String, nullable=True)
     director_name = Column(String, nullable=True)
@@ -68,6 +71,7 @@ class Profile(Base):
     scans = relationship("Scan", back_populates="profile")
 
 
+# --- CONTACTS D'URGENCE ---
 class EmergencyContact(Base):
     __tablename__ = "emergency_contacts"
 
@@ -80,6 +84,7 @@ class EmergencyContact(Base):
     profile = relationship("Profile", back_populates="emergency_contacts")
 
 
+# --- HISTORIQUE DES SCANS ---
 class Scan(Base):
     __tablename__ = "scans"
 
@@ -92,3 +97,15 @@ class Scan(Base):
 
     profile_id = Column(String, ForeignKey("profiles.id"), nullable=False)
     profile = relationship("Profile", back_populates="scans")
+
+
+# --- STRUCTURES DE SANTE PROCHES) ---
+class MedicalFacility(Base):
+    __tablename__ = "medical_facilities"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    phone = Column(String, nullable=False)
+    latitude = Column(Float, nullable=False)
+    longitude = Column(Float, nullable=False)
+
