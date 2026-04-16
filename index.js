@@ -13,7 +13,7 @@ const pool = new Pool({
   }
 });
 
-// 2. CONFIGURATION CORS (Pour ton site Vercel)
+// 2. CONFIGURATION CORS POUR PERMETTRE LES REQUÊTES DEPUIS LE FRONTEND
 app.use(cors({
   origin: 'https://qr-web-dbap.vercel.app',
   methods: ['GET', 'POST'],
@@ -42,7 +42,7 @@ app.post('/api/profile/scan/verify', async (req, res) => {
     // B. Requête SQL pour récupérer les vraies données de l'utilisateur
     // J'utilise les noms de colonnes standards, ajuste-les si nécessaire
     const query = `
-      SELECT first_name, last_name, blood_type, allergies, medical_conditions, emergency_contact 
+      SELECT first_name, last_name, blood_type, medical_conditions, emergency_contact 
       FROM users 
       WHERE qr_token = $1
     `;
@@ -62,7 +62,6 @@ app.post('/api/profile/scan/verify', async (req, res) => {
       },
       medical: {
         blood_type: user.blood_type,
-        allergies: user.allergies,
         conditions: user.medical_conditions
       },
       emergency_contact: user.emergency_contact,
@@ -74,7 +73,7 @@ app.post('/api/profile/scan/verify', async (req, res) => {
 
   } catch (err) {
     console.error("Erreur Database:", err);
-    res.status(500).json({ message: "Erreur lors de la lecture des données réelles sur Supabase." });
+    res.status(500).json({ message: "Erreur lors de la lecture des données." });
   }
 });
 
