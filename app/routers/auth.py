@@ -1,4 +1,15 @@
-@router.post("/register") # Enlève le response_model temporairement pour débugger
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from app.utils.database import get_db
+from app.utils.auth import hash_password, verify_password, create_token, get_current_user
+from app.models.models import User
+from app.schemas.schemas import UserRegister, UserLogin, TokenResponse, UserResponse
+import uuid
+
+# INITIALISATION DU ROUTEUR (Indispensable)
+router = APIRouter()
+
+@router.post("/register")
 def register(data: UserRegister, db: Session = Depends(get_db)):
     print(f"DEBUG: Tentative d'inscription avec le numéro: {data.phone}")
     
