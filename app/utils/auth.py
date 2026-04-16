@@ -1,53 +1,46 @@
-@router.post("/register")
-def register(data: UserRegister, db: Session = Depends(get_db)):
-    # 1. Vérification téléphone
-    if db.query(User).filter(User.phone == data.phone).first():
-        raise HTTPException(status_code=400, detail="Ce numéro est déjà utilisé")
+from passlib.context import CryptContext
+from datetime import datetime, timedelta
+from jose import jwt, JWTError
+from fastapi import HTTPException, status
+import os
 
+# 1. CONFIGURATION DU HACHAGE
+# On utilise l'algorithme 'bcrypt' (standard pour la cybersécurité en Master 2)
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# 2. PARAMÈTRES DU TOKEN (JWT)
+# Le SECRET_KEY permet de signer tes tokens pour qu'ils ne soient pas falsifiables
+SECRET_KEY = "VOTRE_CLE_TRES_SECURISE_A_CHANGER" 
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_DAYS = 7
+
+# --- FONCTIONS POUR LE MOT DE PASSE ---
+
+def hash_password(password: str) -> str:
+    """Transforme le mot de passe en texte illisible (hachage) pour la DB."""
+    return pwd_context.hash(password)
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Compare un mot de passe saisi avec celui stocké en base de données."""
+    return pwd_context.verify(plain_password, hashed_password)
+
+# --- FONCTIONS POUR LE TOKEN DE CONNEXION ---
+
+def create_token(user_id: str) -> str:
+    """Génère un jeton JWT qui expire dans 7 jours."""
+    expire = datetime.utcnow() + timedelta(days=ACCESS_TOKEN_EXPIRE_DAYS)
+    # Le 'sub' (subject) contient l'ID de l'utilisateur
+    to_encode = {"sub": str(user_id), "exp": expire}
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+def decode_token(token: str):
+    """Vérifie si un token est valide et retourne l'ID de l'utilisateur."""
     try:
-        # 2. Création de l'utilisateur
-        user_id = str(uuid.uuid4())
-        new_user = User(
-            id=user_id,
-            phone=data.phone,
-            password=hash_password(data.password),
-        )
-        db.add(new_user)
-
-        # 3. CRÉATION DU PROFIL (Avec TOUS les champs obligatoires)
-        generated_qr_token = str(uuid.uuid4())[:8].upper()
-        
-        new_profile = Profile(
-            id=str(uuid.uuid4()),
-            user_id=user_id,
-            qr_token=generated_qr_token,
-            profile_type="CITIZEN",    # OBLIGATOIRE (nullable=False)
-            first_name="Utilisateur",  # OBLIGATOIRE
-            last_name="SafeMe",       # OBLIGATOIRE
-            birth_date="01/01/2000",   # OBLIGATOIRE
-            gender="M",                # OBLIGATOIRE
-            nationality="Togo",        # OBLIGATOIRE
-            blood_type="NC",           # OBLIGATOIRE
-            access_code="1234",
-            has_vehicle=False
-        )
-        db.add(new_profile)
-
-        db.commit()
-        db.refresh(new_user)
-        
-        token = create_token(new_user.id)
-        return {
-            "message": "Compte créé", 
-            "token": token, 
-            "user": {
-                "id": new_user.id, 
-                "phone": new_user.phone,
-                "qr_token": generated_qr_token
-            }
-        }
-        
-    except Exception as e:
-        db.rollback()
-        print(f"ERREUR CRITIQUE: {str(e)}")
-        raise HTTPException(status_code=500, detail="Erreur lors de la création du profil")
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id: str = payload.get("sub")
+        if user_id is None:
+            return None
+        return user_id
+    except JWTError:
+        return None
