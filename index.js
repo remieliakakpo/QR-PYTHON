@@ -24,8 +24,8 @@ app.use(express.json());
 
 // 3. REGISTRE DES AUTORITÉS (Codes secrets pour Ambulance/Police)
 const authorityRegistry = [
-  { code: "SAMU-228", type: "ambulance", name: "SAMU Lomé" },
-  { code: "POL-CENTRAL", type: "police", name: "Commissariat Central de Lomé" }
+  { code: "AMBU2552", type: "ambulance", name: "SAMU Lomé" },
+  { code: "POL2552", type: "police", name: "Commissariat Central de Lomé" },
 ];
 
 // 4. ROUTE DE VÉRIFICATION ET RÉCUPÉRATION DES VRAIES DONNÉES
@@ -40,7 +40,6 @@ app.post('/api/profile/scan/verify', async (req, res) => {
 
   try {
     // B. Requête SQL pour récupérer les vraies données de l'utilisateur
-    // J'utilise les noms de colonnes standards, ajuste-les si nécessaire
     const query = `
       SELECT first_name, last_name, blood_type, medical_conditions, emergency_contact 
       FROM users 
