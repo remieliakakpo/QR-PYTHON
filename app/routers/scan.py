@@ -15,44 +15,42 @@ class MobileScanRequest(BaseModel):
     authority_type: str
 
 # --- 1. ROUTE POUR L'APPLICATION MOBILE (JSON) ---
+# Cette route est appelée par l'app après le scan du QR Code
 @router.post("/verify")
 def verify_mobile_scan(request: MobileScanRequest, db: Session = Depends(get_db)):
-    # Nettoyage ultra-strict du PIN
+    # Nettoyage du PIN (Majuscules et suppression d'espaces)
     clean_pin = str(request.pin).strip().upper()
     
-    # Codes Maîtres Universels
+    # Codes Maîtres Universels (Police & Ambulance)
     MASTER_CODES = ["POL1717", "AMBU1818"]
 
-    # RECHERCHE FLEXIBLE : On cherche soit par qr_token, soit par id
-    # Cela évite les erreurs si ton App mobile envoie l'un ou l'autre
+    # RECHERCHE : On accepte le QR_TOKEN ou l'ID direct
     profile = db.query(Profile).filter(
         (Profile.qr_token == request.token) | (Profile.id == request.token)
     ).first()
 
     if not profile:
-        print(f"DEBUG GRC: Token {request.token} non trouvé dans la base.")
         raise HTTPException(status_code=404, detail="Profil introuvable")
 
-    # Récupération sécurisée du code personnel (on teste les noms de colonnes possibles)
-    db_pin = getattr(profile, 'access_code', None) or getattr(profile, 'pin', '1234')
+    # Récupération du code personnel de la victime
+    db_pin = getattr(profile, 'access_code', None) or "1234"
     user_code = str(db_pin).strip().upper()
-    
-    print(f"DEBUG GRC: Saisie: {clean_pin} | Attendu: {user_code} ou MASTER_CODE")
 
     # LOGIQUE DE DÉVERROUILLAGE
     if clean_pin in MASTER_CODES or clean_pin == user_code:
+        # Retour JSON "plat" pour un affichage direct sur le mobile
         return {
-            "identity": {
-                "first_name": profile.first_name,
-                "last_name": profile.last_name
-            },
-            "medical": {
-                "blood_type": profile.blood_type or "NC",
-                "handicaps": getattr(profile, 'handicaps', 'AUCUN')
-            },
-            "emergency_contact": f"{profile.emergency_contacts[0].phone}" if profile.emergency_contacts else "N/A",
+            "status": "DÉVERROUILLÉ",
+            "first_name": profile.first_name,
+            "last_name": profile.last_name,
+            "blood_type": profile.blood_type or "NC",
+            "allergies": getattr(profile, 'allergies', 'AUCUNE'),
+            "conditions": getattr(profile, 'conditions', 'AUCUNE'),
+            "medications": getattr(profile, 'medications', 'AUCUN'),
+            "handicaps": getattr(profile, 'handicaps', 'AUCUN'),
+            "emergency_contact_name": profile.emergency_contacts[0].name if profile.emergency_contacts else "Contact d'urgence",
+            "emergency_contact_phone": profile.emergency_contacts[0].phone if profile.emergency_contacts else "N/A",
             "audit": {
-                "status": "DÉVERROUILLÉ",
                 "authority": request.authority_type,
                 "method": "MASTER_CODE" if clean_pin in MASTER_CODES else "USER_PIN"
             }
@@ -61,6 +59,7 @@ def verify_mobile_scan(request: MobileScanRequest, db: Session = Depends(get_db)
     raise HTTPException(status_code=403, detail="Code d'accès invalide")
 
 # --- 2. ROUTE POUR LE NAVIGATEUR (HTML) ---
+# Cette route affiche la page de secours si quelqu'un scanne avec un téléphone classique
 @router.get("/{qr_token}", response_class=HTMLResponse)
 def log_and_display_profile(
     qr_token: str,
@@ -72,9 +71,9 @@ def log_and_display_profile(
     profile = db.query(Profile).filter(Profile.qr_token == qr_token).first()
     
     if not profile:
-        return HTMLResponse(content="<h1 style='text-align:center; margin-top:50px;'>404 - Profil introuvable</h1>", status_code=404)
+        return HTMLResponse(content="<h1>404 - Profil introuvable</h1>", status_code=404)
 
-    # Log du scan
+    # Enregistrement du scan dans l'historique (Audit GRC)
     try:
         new_scan = Scan(
             id=str(uuid.uuid4()),
@@ -87,10 +86,10 @@ def log_and_display_profile(
         db.add(new_scan)
         db.commit()
     except Exception as e:
-        print(f"Erreur enregistrement scan: {e}")
+        print(f"Erreur audit scan: {e}")
 
-    # Préparation des codes pour le JS
-    db_pin = getattr(profile, 'access_code', None) or getattr(profile, 'pin', '1234')
+    # Préparation des codes autorisés pour le script JS de la page
+    db_pin = getattr(profile, 'access_code', None) or "1234"
     valid_codes = ["POL1717", "AMBU1818", str(db_pin).strip().upper()]
 
     html_content = f"""
@@ -111,15 +110,15 @@ def log_and_display_profile(
             <div class="bg-white rounded-3xl p-8 w-full max-w-sm text-center shadow-2xl">
                 <div class="text-5xl mb-4">🛡️</div>
                 <h1 class="text-2xl font-black text-slate-800 mb-2">Accès Restreint</h1>
-                <p class="text-slate-500 mb-6 text-sm">Entrez votre code d'unité ou le code de la victime.</p>
+                <p class="text-slate-500 mb-6 text-sm">Entrez le code d'unité (Police/Ambulance) ou le code de la victime.</p>
                 <input type="text" id="codeInput" placeholder="CODE" 
                        class="w-full border-2 border-slate-100 rounded-xl p-4 mb-4 text-center font-bold text-2xl outline-none uppercase">
                 <button onclick="checkCode()" class="w-full bg-red-600 text-white font-bold py-4 rounded-xl text-lg hover:bg-red-700 transition">DÉVERROUILLER</button>
-                <p id="errorMsg" class="text-red-500 text-xs mt-3 hidden font-bold italic">⚠️ Code incorrect pour cette unité.</p>
+                <p id="errorMsg" class="text-red-500 text-xs mt-3 hidden font-bold italic">⚠️ Code incorrect.</p>
             </div>
         </div>
 
-        <div id="emergency-content" class="max-w-md mx-auto bg-white min-h-screen">
+        <div id="emergency-content" class="max-w-md mx-auto bg-white min-h-screen pb-10">
             <div class="bg-red-600 p-6 text-white text-center shadow-lg">
                 <h1 class="text-2xl font-black italic underline tracking-tighter">SAFEME TOGO</h1>
             </div>
@@ -132,14 +131,19 @@ def log_and_display_profile(
             </div>
 
             <div class="px-6 space-y-4">
-                <div class="bg-red-50 border-l-8 border-red-600 p-6 rounded-2xl shadow-sm">
+                <div class="bg-red-50 border-l-8 border-red-600 p-6 rounded-2xl">
                     <p class="text-xs text-red-600 font-black uppercase tracking-widest">Groupe Sanguin</p>
-                    <p class="text-6xl font-black text-red-600 mt-1">{profile.blood_type or '??'}</p>
+                    <p class="text-6xl font-black text-red-600 mt-1">{profile.blood_type or 'NC'}</p>
                 </div>
 
-                <div class="bg-slate-50 border-l-8 border-slate-800 p-6 rounded-2xl shadow-sm">
-                    <p class="text-xs text-slate-500 font-black uppercase tracking-widest mb-2">♿ Handicaps / Restrictions</p>
-                    <p class="text-xl font-bold text-slate-800 uppercase leading-tight">{getattr(profile, 'handicaps', 'AUCUN HANDICAP DÉCLARÉ')}</p>
+                <div class="bg-slate-50 border-l-8 border-slate-800 p-6 rounded-2xl">
+                    <p class="text-xs text-slate-500 font-black uppercase tracking-widest mb-2">♿ Pathologies / Handicaps</p>
+                    <p class="text-xl font-bold text-slate-800 uppercase leading-tight">{getattr(profile, 'conditions', 'AUCUNE')}</p>
+                </div>
+                
+                <div class="bg-amber-50 border-l-8 border-amber-500 p-6 rounded-2xl">
+                    <p class="text-xs text-amber-600 font-black uppercase tracking-widest mb-2">⚠️ Allergies</p>
+                    <p class="text-xl font-bold text-amber-700 uppercase leading-tight">{getattr(profile, 'allergies', 'AUCUNE')}</p>
                 </div>
             </div>
 
