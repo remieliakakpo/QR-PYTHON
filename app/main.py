@@ -1,61 +1,44 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from app.utils.database import get_db
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from app.routers import scan  # Assure-toi que ton fichier scan.py est dans app/routers/
+from app.utils.database import engine
 from app.models import models
-from pydantic import BaseModel
 
-router = APIRouter()
+# Création des tables dans la base de données (Supabase) si elles n'existent pas
+models.Base.metadata.create_all(bind=engine)
 
-# Schéma pour recevoir la requête de scan
-class ScanVerifyRequest(BaseModel):
-    token: str
-    pin: str
-    authority_type: str
+# --- L'INSTANCE CRITIQUE POUR RAILWAY ---
+# C'est cette variable "app" que le serveur Uvicorn recherche
+app = FastAPI(
+    title="SafeMe API",
+    description="Backend de gestion d'urgence pour le projet SafeMe Togo",
+    version="1.0.0"
+)
 
-@router.post("/verify")
-def verify_scan(request: ScanVerifyRequest, db: Session = Depends(get_db)):
-    # 1. Nettoyage du code saisi (Majuscules + suppression espaces)
-    clean_pin = request.pin.strip().upper()
-    
-    # 2. Définition des CODES MAÎTRES (Gouvernance GRC)
-    MASTER_CODES = ["POL1717", "AMBU1818"]
+# --- CONFIGURATION CORS ---
+# Indispensable pour que ton application mobile (React Native) ne soit pas bloquée
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Permet à toutes les origines de se connecter
+    allow_credentials=True,
+    allow_methods=["*"],  # Autorise GET, POST, etc.
+    allow_headers=["*"],
+)
 
-    # 3. Recherche du profil par son ID (le token du QR code)
-    profile = db.query(models.Profile).filter(models.Profile.id == request.token).first()
+# --- INCLUSION DES ROUTEURS ---
+# On attache les routes définies dans scan.py (HTML et JSON)
+# Elles seront accessibles via https://safelife.up.railway.app/scan/...
+app.include_router(scan.router, prefix="/scan", tags=["Scan & Urgence"])
 
-    if not profile:
-        raise HTTPException(status_code=404, detail="Profil de la victime introuvable.")
+# Route de test pour vérifier que le serveur est en ligne
+@app.get("/")
+def health_check():
+    return {
+        "status": "online",
+        "project": "SafeMe Togo",
+        "author": "Rémi Eli Kokou"
+    }
 
-    # 4. LOGIQUE DE DÉVERROUILLAGE
-    # Cas A : C'est un code autorité
-    if clean_pin in MASTER_CODES:
-        # On renvoie les données directement (Accès privilégié)
-        return {
-            "identity": {
-                "first_name": profile.first_name,
-                "last_name": profile.last_name
-            },
-            "medical": {
-                "blood_type": profile.blood_type,
-                "allergies": profile.allergies,
-                "treatment": profile.treatment
-            },
-            "emergency_contact": profile.emergency_contact_phone, # Ton champ du Step 2
-            "audit": {
-                "verified_by": f"Autorité ({request.authority_type})",
-                "code_used": clean_pin
-            }
-        }
-
-    # Cas B : C'est le code personnel de l'utilisateur
-    # Note : Vérifie si ta colonne s'appelle 'access_code' ou 'pin' dans ton modèle
-    if clean_pin == profile.access_code:
-        return {
-            "identity": {"first_name": profile.first_name, "last_name": profile.last_name},
-            "medical": {"blood_type": profile.blood_type},
-            "emergency_contact": profile.emergency_contact_phone,
-            "audit": {"verified_by": "Code Personnel"}
-        }
-
-    # Cas C : Le code est faux
-    raise HTTPException(status_code=403, detail="Code d'accès invalide.")
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
