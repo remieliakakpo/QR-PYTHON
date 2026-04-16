@@ -1,44 +1,65 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import scan  # Assure-toi que ton fichier scan.py est dans app/routers/
+from app.routers import scan, auth  # Vérifie que ces fichiers existent dans app/routers/
 from app.utils.database import engine
 from app.models import models
+import logging
 
-# Création des tables dans la base de données (Supabase) si elles n'existent pas
-models.Base.metadata.create_all(bind=engine)
+# Configuration des logs pour voir ce qui se passe sur Railway
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# --- L'INSTANCE CRITIQUE POUR RAILWAY ---
-# C'est cette variable "app" que le serveur Uvicorn recherche
+# Synchronisation de la base de données (Supabase/PostgreSQL)
+# Cela crée les tables User, Profile, Scan, etc., si elles n'existent pas
+try:
+    models.Base.metadata.create_all(bind=engine)
+    logger.info("✅ Base de données synchronisée avec succès.")
+except Exception as e:
+    logger.error(f"❌ Erreur de synchronisation DB : {e}")
+
+# --- INITIALISATION DE L'APP ---
 app = FastAPI(
     title="SafeMe API",
-    description="Backend de gestion d'urgence pour le projet SafeMe Togo",
-    version="1.0.0"
+    description="Système de GRC et Urgence Médicale - Togo",
+    version="1.1.0",
+    # redirect_slashes=True aide à éviter les 404 si l'app mobile ajoute un "/" à la fin de l'URL
+    redirect_slashes=True 
 )
 
-# --- CONFIGURATION CORS ---
-# Indispensable pour que ton application mobile (React Native) ne soit pas bloquée
+# --- CONFIGURATION CORS (CRITIQUE POUR REACT NATIVE) ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Permet à toutes les origines de se connecter
+    allow_origins=["*"], 
     allow_credentials=True,
-    allow_methods=["*"],  # Autorise GET, POST, etc.
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# --- INCLUSION DES ROUTEURS ---
-# On attache les routes définies dans scan.py (HTML et JSON)
-# Elles seront accessibles via https://safelife.up.railway.app/scan/...
-app.include_router(scan.router, prefix="/scan", tags=["Scan & Urgence"])
+# --- INCLUSION DES MODULES (ROUTERS) ---
 
-# Route de test pour vérifier que le serveur est en ligne
+# Les routes d'authentification (Register, Login, Me)
+# URL de base : https://safelife.up.railway.app/auth/register
+app.include_router(auth.router, prefix="/auth", tags=["Authentification"])
+
+# Les routes de scan et affichage profil
+# URL de base : https://safelife.up.railway.app/scan/verify
+app.include_router(scan.router, prefix="/scan", tags=["Système de Scan"])
+
+# --- ROUTES DE TEST ---
 @app.get("/")
-def health_check():
+def home():
     return {
         "status": "online",
-        "project": "SafeMe Togo",
-        "author": "Rémi Eli Kokou"
+        "project": "SafeMe",
+        "version": "1.1.0",
+        "endpoints": ["/auth", "/scan"]
     }
+
+@app.get("/health")
+def health_check():
+    return {"check": "database & api connection ok"}
 
 if __name__ == "__main__":
     import uvicorn
+    # Le port est récupéré dynamiquement par Railway via la variable d'environnement
     uvicorn.run(app, host="0.0.0.0", port=8000)
