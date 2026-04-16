@@ -1,47 +1,53 @@
-from datetime import datetime, timedelta
-from jose import JWTError, jwt
-from passlib.context import CryptContext
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy.orm import Session
-from app.utils.database import get_db
-from app.models.models import User
-from dotenv import load_dotenv
-import os
+@router.post("/register")
+def register(data: UserRegister, db: Session = Depends(get_db)):
+    # 1. Vérification téléphone
+    if db.query(User).filter(User.phone == data.phone).first():
+        raise HTTPException(status_code=400, detail="Ce numéro est déjà utilisé")
 
-load_dotenv()
-
-JWT_SECRET = os.getenv("JWT_SECRET", "mediqr_jwt_secret_2026")
-ALGORITHM = "HS256"
-EXPIRE_DAYS = 30
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-bearer_scheme = HTTPBearer()
-
-def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
-
-def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
-
-def create_token(user_id: str) -> str:
-    expire = datetime.utcnow() + timedelta(days=EXPIRE_DAYS)
-    return jwt.encode({"user_id": user_id, "exp": expire}, JWT_SECRET, algorithm=ALGORITHM)
-
-def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
-    db: Session = Depends(get_db)
-) -> User:
-    token = credentials.credentials
     try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[ALGORITHM])
-        user_id = payload.get("user_id")
-        if not user_id:
-            raise HTTPException(status_code=401, detail="Token invalide")
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Token expiré ou invalide")
+        # 2. Création de l'utilisateur
+        user_id = str(uuid.uuid4())
+        new_user = User(
+            id=user_id,
+            phone=data.phone,
+            password=hash_password(data.password),
+        )
+        db.add(new_user)
 
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=401, detail="Utilisateur introuvable")
-    return user
+        # 3. CRÉATION DU PROFIL (Avec TOUS les champs obligatoires)
+        generated_qr_token = str(uuid.uuid4())[:8].upper()
+        
+        new_profile = Profile(
+            id=str(uuid.uuid4()),
+            user_id=user_id,
+            qr_token=generated_qr_token,
+            profile_type="CITIZEN",    # OBLIGATOIRE (nullable=False)
+            first_name="Utilisateur",  # OBLIGATOIRE
+            last_name="SafeMe",       # OBLIGATOIRE
+            birth_date="01/01/2000",   # OBLIGATOIRE
+            gender="M",                # OBLIGATOIRE
+            nationality="Togo",        # OBLIGATOIRE
+            blood_type="NC",           # OBLIGATOIRE
+            access_code="1234",
+            has_vehicle=False
+        )
+        db.add(new_profile)
+
+        db.commit()
+        db.refresh(new_user)
+        
+        token = create_token(new_user.id)
+        return {
+            "message": "Compte créé", 
+            "token": token, 
+            "user": {
+                "id": new_user.id, 
+                "phone": new_user.phone,
+                "qr_token": generated_qr_token
+            }
+        }
+        
+    except Exception as e:
+        db.rollback()
+        print(f"ERREUR CRITIQUE: {str(e)}")
+        raise HTTPException(status_code=500, detail="Erreur lors de la création du profil")
