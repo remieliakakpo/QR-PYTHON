@@ -1,16 +1,15 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import scan, auth  # Vérifie que ces fichiers existent dans app/routers/
+from app.routers import scan, auth 
 from app.utils.database import engine
 from app.models import models
 import logging
 
-# Configuration des logs pour voir ce qui se passe sur Railway
+# Configuration des logs
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Synchronisation de la base de données (Supabase/PostgreSQL)
-# Cela crée les tables User, Profile, Scan, etc., si elles n'existent pas
+# Synchronisation de la base de données
 try:
     models.Base.metadata.create_all(bind=engine)
     logger.info("✅ Base de données synchronisée avec succès.")
@@ -22,7 +21,6 @@ app = FastAPI(
     title="SafeMe API",
     description="Système de GRC et Urgence Médicale - Togo",
     version="1.1.0",
-    # redirect_slashes=True aide à éviter les 404 si l'app mobile ajoute un "/" à la fin de l'URL
     redirect_slashes=True 
 )
 
@@ -36,14 +34,12 @@ app.add_middleware(
 )
 
 # --- INCLUSION DES MODULES (ROUTERS) ---
+# On ajuste les préfixes pour correspondre aux appels "404" de ton application mobile
 
-# Les routes d'authentification (Register, Login, Me)
-# URL de base : https://safelife.up.railway.app/auth/register
 app.include_router(auth.router, prefix="/auth", tags=["Authentification"])
 
-# Les routes de scan et affichage profil
-# URL de base : https://safelife.up.railway.app/scan/verify
-app.include_router(scan.router, prefix="/scan", tags=["Système de Scan"])
+
+app.include_router(scan.router, prefix="/api/profile/scan", tags=["Système de Scan"])
 
 # --- ROUTES DE TEST ---
 @app.get("/")
@@ -52,7 +48,7 @@ def home():
         "status": "online",
         "project": "SafeMe",
         "version": "1.1.0",
-        "endpoints": ["/auth", "/scan"]
+        "endpoints": ["/auth", "/api/profile/scan"]
     }
 
 @app.get("/health")
@@ -61,5 +57,7 @@ def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    # Le port est récupéré dynamiquement par Railway via la variable d'environnement
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    import os
+    # Utilisation du port dynamique de Railway
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
