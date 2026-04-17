@@ -9,55 +9,33 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Synchronisation de la base de données
+# Synchronisation DB
 try:
     models.Base.metadata.create_all(bind=engine)
-    logger.info("✅ Base de données synchronisée avec succès.")
+    logger.info("✅ Base de données SafeLife prête.")
 except Exception as e:
-    logger.error(f"❌ Erreur de synchronisation DB : {e}")
+    logger.error(f"❌ Erreur DB : {e}")
 
-# --- INITIALISATION DE L'APP ---
-app = FastAPI(
-    title="SafeMe API",
-    description="Système de GRC et Urgence Médicale - Togo",
-    version="1.1.0",
-    redirect_slashes=True 
-)
+app = FastAPI(title="SafeLife API")
 
-# --- CONFIGURATION CORS (CRITIQUE POUR REACT NATIVE) ---
+# CORS (Crucial pour React Native)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], 
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# --- INCLUSION DES MODULES (ROUTERS) ---
-# On ajuste les préfixes pour correspondre aux appels "404" de ton application mobile
+# --- ROUTAGE ---
 
-app.include_router(auth.router, prefix="/auth", tags=["Authentification"])
+# On enregistre les DEUX pour que ton app ne reçoive plus de 404
+app.include_router(auth.router, prefix="/auth", tags=["Auth"])
+app.include_router(auth.router, prefix="/profil", tags=["Profil Mobile"])
 
+# Système de Scan et génération de QR (Pour ton étape 5)
+app.include_router(scan.router, prefix="/api/profile", tags=["Scan"])
 
-app.include_router(scan.router, prefix="/api/profile/scan", tags=["Système de Scan"])
-
-# --- ROUTES DE TEST ---
 @app.get("/")
-def home():
-    return {
-        "status": "online",
-        "project": "SafeMe",
-        "version": "1.1.0",
-        "endpoints": ["/auth", "/api/profile/scan"]
-    }
-
-@app.get("/health")
-def health_check():
-    return {"check": "database & api connection ok"}
-
-if __name__ == "__main__":
-    import uvicorn
-    import os
-    # Utilisation du port dynamique de Railway
-    port = int(os.environ.get("PORT", 8000))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+def read_root():
+    return {"status": "online", "project": "SafeLife"}

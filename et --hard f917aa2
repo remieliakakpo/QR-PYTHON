@@ -1,0 +1,28 @@
+[33mb68a7c8[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m)[m QR code generation update
+[33m580ec19[m QR code generation update
+[33mdd1089f[m main update
+[33mf38ed6a[m mise à jour de la page d'affichage des informations
+[33m4beb8f7[m mise à jour de la page d'affichage des informations
+[33mf917aa2[m mise à jour du backend code d'accès
+[33m87a5681[m main update
+[33maab774c[m main update
+[33m8814703[m mise à jour du backend code d'accès
+[33m2ba25e5[m mise à jour du backend code d'accès
+[33m7c33feb[m main update
+[33m5bbf8ed[m mise à jour du backend code d'accès
+[33me305d29[m mise à jour du backend code d'accès
+[33m9a9c187[m mise à jour du backend code d'accès
+[33m1c69107[m mise à jour du backend code d'accès
+[33ma5d9e06[m mise à jour page scan
+[33mc434ae8[m page scan, demande de code d'accès
+[33mca0233c[m modification, API géolocalisation, page scan
+[33m581934f[m fix: gestion de geolocalisation, redirection vers les hopitaux proches
+[33me98041a[m feat: generation du format pdf, envoi de localisation au click
+[33m89152a7[m feat: ajout de la fiche d'urgence responsive au scan
+[33mbf85e62[m fix: make documents optional
+[33ma7c455b[m new update:
+[33mf73afe6[m new update:
+[33mf0f9d74[m new update:
+[33m9c29ccb[m feat: authentification par téléphone au lieu d'email
+[33md12c268[m feat: ajout requirements et Procfile pour Railway
+[33m8d4745b[m init backend FastAPI QR
