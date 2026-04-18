@@ -1,7 +1,8 @@
 from passlib.context import CryptContext
 from datetime import datetime, timedelta
 from jose import jwt, JWTError
-from fastapi import HTTPException, status
+from fastapi import HTTPException, status, Depends
+from fastapi.security import OAuth2PasswordBearer
 import os
 
 # 1. CONFIGURATION DU HACHAGE
