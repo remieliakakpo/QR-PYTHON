@@ -6,14 +6,16 @@ from fastapi.security import OAuth2PasswordBearer
 import os
 
 # 1. CONFIGURATION DU HACHAGE
-# On utilise l'algorithme 'bcrypt' (standard pour la cybersécurité en Master 2)
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # 2. PARAMÈTRES DU TOKEN (JWT)
-# Le SECRET_KEY permet de signer tes tokens pour qu'ils ne soient pas falsifiables
 SECRET_KEY = "VOTRE_CLE_TRES_SECURISE_A_CHANGER" 
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_DAYS = 7
+
+# --- 3. CONFIGURATION DE LA SÉCURITÉ (LA LIGNE QUI MANQUAIT) ---
+# Cette ligne permet à FastAPI de savoir où chercher le token dans les headers
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
 # --- FONCTIONS POUR LE MOT DE PASSE ---
 
@@ -30,7 +32,6 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 def create_token(user_id: str) -> str:
     """Génère un jeton JWT qui expire dans 7 jours."""
     expire = datetime.utcnow() + timedelta(days=ACCESS_TOKEN_EXPIRE_DAYS)
-    # Le 'sub' (subject) contient l'ID de l'utilisateur
     to_encode = {"sub": str(user_id), "exp": expire}
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
@@ -45,7 +46,20 @@ def decode_token(token: str):
         return user_id
     except JWTError:
         return None
-    
+
+# --- DÉPENDANCE POUR RÉCUPÉRER L'UTILISATEUR ---
+
 async def get_current_user(token: str = Depends(oauth2_scheme)):
-    # Pour l'instant, on laisse passer pour débloquer le Step 5
-    return {"user": "active"}
+    """
+    Cette fonction est utilisée par les routes pour vérifier 
+    que l'utilisateur est bien connecté.
+    """
+    user_id = decode_token(token)
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session invalide ou expirée",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    # Pour l'instant on retourne l'ID, on pourra retourner l'objet User plus tard
+    return user_id
