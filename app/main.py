@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import scan, auth, profil
+from app.routers import scan, auth
 from app.utils.database import engine
 from app.models import models
 import logging
