@@ -1,88 +1,71 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+import uuid
 from app.utils.database import get_db
 from app.utils.auth import get_current_user
-from app.models.models import User, Profile, EmergencyContact
-from app.schemas.schemas import ProfileCreate, ProfileResponse
-import uuid
+from app.models.models import Profile
+from pydantic import BaseModel
+from typing import Optional
 
 router = APIRouter()
 
-# --- 1. SCAN INITIAL (Public) ---
-@router.get("/{profile_id}")
-def get_profile_status(profile_id: str, db: Session = Depends(get_db)):
-    profile = db.query(Profile).filter(Profile.id == profile_id).first()
-    if not profile:
-        raise HTTPException(status_code=404, detail="Profil introuvable")
+# Schéma de données pour la réception
+class ProfileCreate(BaseModel):
+    first_name: str
+    last_name: str
+    blood_type: Optional[str] = None
+    allergies: Optional[str] = None
+    conditions: Optional[str] = None
+    medications: Optional[str] = None
+    access_code: Optional[str] = "1234"
 
-    # On confirme juste l'identité pour rassurer le secouriste
-    return {
-        "id": profile.id,
-        "owner_name": f"{profile.first_name} {profile.last_name}",
-        "status": "locked" 
-    }
+@router.post("/")
+def create_or_update_profile(
+    profile_data: ProfileCreate, 
+    db: Session = Depends(get_db), 
+    current_user: str = Depends(get_current_user)
+):
+    # 1. On cherche si un profil existe déjà pour cet utilisateur
+    # Note : current_user est l'ID string récupéré via le token
+    existing_profile = db.query(Profile).filter(Profile.user_id == current_user).first()
 
-# --- 2. DÉVERROUILLAGE UNIQUE (Le code valide l'accès à TOUT) ---
-@router.post("/{profile_id}/unlock")
-def unlock_profile(profile_id: str, access_code: str, db: Session = Depends(get_db)):
-    profile = db.query(Profile).filter(Profile.id == profile_id).first()
+    if existing_profile:
+        # --- LOGIQUE DE MISE À JOUR ---
+        existing_profile.first_name = profile_data.first_name
+        existing_profile.last_name = profile_data.last_name
+        existing_profile.blood_type = profile_data.blood_type
+        existing_profile.allergies = profile_data.allergies
+        existing_profile.conditions = profile_data.conditions
+        existing_profile.medications = profile_data.medications
+        existing_profile.access_code = profile_data.access_code
+        
+        db.commit()
+        db.refresh(existing_profile)
+        
+        return {
+            "status": "updated",
+            "message": "Profil mis à jour avec succès",
+            "qr_token": existing_profile.qr_token
+        }
+
+    # --- LOGIQUE DE CRÉATION (Si aucun profil n'existe) ---
+    new_qr_token = str(uuid.uuid4())[:8].upper() # Génère un code court unique (ex: A1B2C3D4)
     
-    if not profile:
-        raise HTTPException(status_code=404, detail="Profil introuvable")
-    
-    if profile.access_code != access_code:
-        raise HTTPException(status_code=401, detail="Code d'accès invalide")
-
-    # Une fois déverrouillé, on donne toutes les infos nécessaires aux secours
-    return {
-        "status": "unlocked",
-        "identity": {
-            "first_name": profile.first_name,
-            "last_name": profile.last_name,
-            "birth_date": profile.birth_date
-        },
-        "medical": {
-            "blood_type": profile.blood_type,
-            "disabilities": profile.disabilities,
-        },
-        "contacts": [
-            {"name": c.name, "phone": c.phone, "relation": c.relation}
-            for c in profile.emergency_contacts
-        ],
-        "school": {
-            "parent_name": profile.parent_name,
-            "parent_phone": profile.parent_phone
-        } if profile.profile_type == "student" else None
-    }
-
-# --- 3. CRÉATION DU PROFIL ---
-@router.post("/", response_model=ProfileResponse, status_code=status.HTTP_201_CREATED)
-def create_profile(data: ProfileCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    if db.query(Profile).filter(Profile.user_id == current_user).first():
-        raise HTTPException(status_code=400, detail="Un profil existe déjà")
-
-    profile = Profile(
-        id=str(uuid.uuid4()),
-        qr_token=str(uuid.uuid4()),
-        user_id=current_user.id,
-        **data.dict(exclude={'emergency_contacts'}), # On injecte les données proprement
-        access_code=getattr(data, 'access_code', '1234')
+    new_profile = Profile(
+        user_id=current_user,
+        qr_token=new_qr_token,
+        **profile_data.dict()
     )
     
-    db.add(profile)
-    db.flush()
-
-    for contact in data.emergency_contacts:
-        db.add(EmergencyContact(id=str(uuid.uuid4()), profile_id=profile.id, **contact.dict()))
-
-    db.commit()
-    db.refresh(profile)
-    return profile
-
-# --- 4. MON PROFIL (Utilisateur connecté) ---
-@router.get("/me", response_model=ProfileResponse)
-def get_my_profile(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    profile = db.query(Profile).filter(Profile.user_id == current_user.id).first()
-    if not profile:
-        raise HTTPException(status_code=404, detail="Profil introuvable")
-    return profile
+    try:
+        db.add(new_profile)
+        db.commit()
+        db.refresh(new_profile)
+        return {
+            "status": "created",
+            "message": "Profil créé avec succès",
+            "qr_token": new_qr_token
+        }
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Erreur lors de la création : {str(e)}")
