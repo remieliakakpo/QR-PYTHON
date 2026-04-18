@@ -13,21 +13,21 @@ class ScanVerifyRequest(BaseModel):
     pin: str
     authority_type: str = "emergency_unit"
 
+# Codes maîtres pour les unités d'urgence du Togo/Bénin
 MASTER_CODES = {
-    "POL1717": "Police",
-    "AMBU1818": "Ambulancier",
-    "POMP2626": "Pompiers",
-    "MEDC3737": "Médecin",
+    "POL1717": "Police Nationale",
+    "AMBU1818": "Service d'Ambulance",
+    "POMP2626": "Sapeurs-Pompiers",
+    "MEDC3737": "Corps Médical",
 }
 
-# ─── GET /scan/{qr_token} ── Fiche publique niveau 1
 @router.get("/{qr_token}", response_class=HTMLResponse)
 def public_profile(qr_token: str, request: Request, db: Session = Depends(get_db)):
     profile = db.query(Profile).filter(Profile.qr_token == qr_token).first()
     if not profile:
         raise HTTPException(status_code=404, detail="Profil SafeLife introuvable")
 
-    # Enregistrer le scan
+    # Enregistrement du log de scan
     scan = Scan(
         id=str(uuid.uuid4()),
         profile_id=profile.id,
@@ -37,38 +37,15 @@ def public_profile(qr_token: str, request: Request, db: Session = Depends(get_db
     db.add(scan)
     db.commit()
 
-    # Contacts d'urgence
-    contacts_html = ""
-    for c in profile.emergency_contacts:
-        contacts_html += f"""
+    # Génération dynamique des contacts
+    contacts_html = "".join([f"""
         <div class="contact-card">
             <div class="contact-info">
                 <span class="contact-name">{c.name}</span>
                 <span class="contact-relation">{c.relation or 'Contact'}</span>
             </div>
             <a href="tel:{c.phone}" class="call-btn">📞 {c.phone}</a>
-        </div>"""
-
-    vehicle_html = ""
-    if profile.has_vehicle:
-        vehicle_html = f"""
-        <div class="section">
-            <h3>🚗 Véhicule</h3>
-            <div class="info-row"><span>Type</span><strong>{profile.vehicle_type or 'N/A'}</strong></div>
-            <div class="info-row"><span>Immatriculation</span><strong>{profile.plate or 'N/A'}</strong></div>
-            <div class="info-row"><span>Marque / Modèle</span><strong>{(profile.brand or '') + ' ' + (profile.model or '')}</strong></div>
-        </div>"""
-
-    school_html = ""
-    if profile.profile_type == "student" and profile.school_name:
-        school_html = f"""
-        <div class="section">
-            <h3>🏫 École</h3>
-            <div class="info-row"><span>École</span><strong>{profile.school_name}</strong></div>
-            <div class="info-row"><span>Classe</span><strong>{profile.class_name or 'N/A'}</strong></div>
-            <div class="info-row"><span>Directeur</span><strong>{profile.director_name or 'N/A'} — {profile.director_phone or 'N/A'}</strong></div>
-            <div class="info-row"><span>Parent</span><strong>{profile.parent_name or 'N/A'} — {profile.parent_phone or 'N/A'}</strong></div>
-        </div>"""
+        </div>""" for c in profile.emergency_contacts])
 
     html = f"""<!DOCTYPE html>
 <html lang="fr">
@@ -78,160 +55,133 @@ def public_profile(qr_token: str, request: Request, db: Session = Depends(get_db
     <title>SafeLife — Fiche d'urgence</title>
     <style>
         * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f1f5f9; color: #1e293b; }}
-        .header {{ background: linear-gradient(135deg, #007A3D, #005C2E); padding: 24px 20px; text-align: center; }}
-        .logo {{ font-size: 28px; font-weight: 900; color: white; letter-spacing: 1px; }}
-        .logo span {{ color: #FFCD00; }}
-        .badge {{ background: rgba(255,255,255,0.15); color: white; padding: 4px 12px; border-radius: 99px; font-size: 12px; margin-top: 8px; display: inline-block; }}
-        .container {{ max-width: 480px; margin: 0 auto; padding: 16px; }}
-        .alert-banner {{ background: #fee2e2; border: 1px solid #fca5a5; border-radius: 12px; padding: 12px 16px; margin-bottom: 16px; text-align: center; }}
-        .alert-banner p {{ color: #dc2626; font-weight: 700; font-size: 14px; }}
-        .section {{ background: white; border-radius: 16px; padding: 18px; margin-bottom: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }}
-        .section h3 {{ font-size: 13px; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 14px; }}
-        .name {{ font-size: 26px; font-weight: 800; color: #0f172a; margin-bottom: 4px; }}
-        .profile-type {{ font-size: 13px; color: #64748b; }}
-        .blood-badge {{ background: #fff1f2; border: 2px solid #fca5a5; border-radius: 12px; padding: 12px 20px; display: inline-flex; flex-direction: column; align-items: center; margin-bottom: 14px; }}
-        .blood-label {{ font-size: 10px; color: #e11d48; font-weight: 800; text-transform: uppercase; }}
-        .blood-value {{ font-size: 36px; font-weight: 900; color: #e11d48; line-height: 1.1; }}
-        .info-row {{ display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f1f5f9; font-size: 14px; }}
-        .info-row:last-child {{ border-bottom: none; }}
-        .info-row span {{ color: #64748b; }}
-        .info-row strong {{ color: #0f172a; text-align: right; max-width: 60%; }}
-        .contact-card {{ display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #f1f5f9; }}
-        .contact-card:last-child {{ border-bottom: none; }}
-        .contact-name {{ font-weight: 700; font-size: 15px; display: block; }}
-        .contact-relation {{ font-size: 12px; color: #64748b; }}
-        .call-btn {{ background: #007A3D; color: white; padding: 8px 14px; border-radius: 10px; font-size: 13px; font-weight: 700; text-decoration: none; white-space: nowrap; }}
-        .pro-section {{ background: #0f172a; border-radius: 16px; padding: 18px; margin-bottom: 12px; }}
-        .pro-section h3 {{ color: #94a3b8; font-size: 12px; text-transform: uppercase; margin-bottom: 12px; }}
-        .pro-input {{ width: 100%; background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 14px; color: white; font-size: 20px; text-align: center; font-weight: 800; letter-spacing: 2px; margin-bottom: 12px; outline: none; }}
-        .pro-input::placeholder {{ color: #475569; letter-spacing: 0; font-size: 14px; }}
-        .pro-btn {{ width: 100%; background: #007A3D; color: white; border: none; padding: 14px; border-radius: 10px; font-size: 15px; font-weight: 700; cursor: pointer; }}
-        .footer {{ text-align: center; padding: 20px; color: #94a3b8; font-size: 11px; }}
-        .sos-banner {{ background: #dc2626; color: white; text-align: center; padding: 10px; font-weight: 700; font-size: 13px; }}
+        body {{ font-family: 'Segoe UI', system-ui, sans-serif; background: #f8fafc; color: #1e293b; }}
+        .sos-banner {{ background: #be123c; color: white; text-align: center; padding: 8px; font-weight: 800; font-size: 12px; }}
+        .header {{ background: #007A3D; padding: 30px 20px; text-align: center; color: white; }}
+        .container {{ max-width: 500px; margin: 0 auto; padding: 15px; }}
+        .section {{ background: white; border-radius: 15px; padding: 20px; margin-bottom: 15px; shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }}
+        .section h3 {{ font-size: 12px; color: #64748b; text-transform: uppercase; margin-bottom: 15px; border-bottom: 1px solid #f1f5f9; padding-bottom: 5px; }}
+        .name {{ font-size: 24px; font-weight: 800; }}
+        .blood-badge {{ background: #fff1f2; border: 2px solid #fda4af; border-radius: 15px; padding: 15px; text-align: center; margin: 10px 0; }}
+        .blood-value {{ font-size: 32px; font-weight: 900; color: #e11d48; }}
+        .info-row {{ display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f8fafc; font-size: 14px; }}
+        .contact-card {{ display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f1f5f9; }}
+        .call-btn {{ background: #007A3D; color: white; padding: 10px 15px; border-radius: 8px; text-decoration: none; font-weight: 700; }}
+        
+        /* Section Pro */
+        .pro-box {{ background: #0f172a; border-radius: 15px; padding: 20px; color: white; }}
+        .pro-input {{ width: 100%; padding: 15px; border-radius: 10px; border: 1px solid #334155; background: #1e293b; color: white; font-size: 18px; text-align: center; margin-bottom: 10px; }}
+        .pro-btn {{ width: 100%; background: #007A3D; color: white; border: none; padding: 15px; border-radius: 10px; font-weight: 700; cursor: pointer; }}
+        .hidden-data {{ display: none; margin-top: 15px; background: #1e293b; padding: 15px; border-radius: 10px; border-left: 4px solid #4ade80; }}
     </style>
 </head>
 <body>
-    <div class="sos-banner">🚨 FICHE D'URGENCE SAFELIFE — NE PAS SUPPRIMER</div>
+    <div class="sos-banner">🚨 INTERVENTION D'URGENCE — SAFELIFE</div>
     <div class="header">
-        <div class="logo">SAFE<span>LIFE</span></div>
-        <div class="badge">Fiche scannée avec succès</div>
+        <h1>SAFE<span style="color:#FFCD00">LIFE</span></h1>
+        <p>Identité Numérique de Secours</p>
     </div>
 
     <div class="container">
-        <div class="alert-banner">
-            <p>⚠️ En cas d'urgence, appelez le 118 immédiatement</p>
+        <div class="section">
+            <h3>👤 Identité de base</h3>
+            <div class="name">{profile.first_name} {profile.last_name}</div>
+            <div style="color:#64748b">Né(e) le {profile.birth_date or 'NC'}</div>
         </div>
 
         <div class="section">
-            <h3>👤 Identité</h3>
-            <div class="name">{profile.first_name} {profile.last_name}</div>
-            <div class="profile-type">{"Élève" if profile.profile_type == "student" else "Adulte"} • Né(e) le {profile.birth_date} • {profile.gender}</div>
-        </div>
-
-        <div class="section" style="border-left: 4px solid #e11d48;">
-            <h3>🏥 Informations médicales</h3>
+            <h3>🏥 Médical (Public)</h3>
             <div class="blood-badge">
-                <span class="blood-label">Groupe sanguin</span>
-                <span class="blood-value">{profile.blood_type or 'NC'}</span>
+                <div style="font-size:10px; color:#e11d48; font-weight:800">GROUPE SANGUIN</div>
+                <div class="blood-value">{profile.blood_type or 'NC'}</div>
             </div>
-            {"<div class='info-row'><span>Allergies</span><strong>" + profile.allergies + "</strong></div>" if profile.allergies else ""}
-            {"<div class='info-row'><span>Maladies</span><strong>" + profile.conditions + "</strong></div>" if profile.conditions else ""}
-            {"<div class='info-row'><span>Médicaments</span><strong>" + profile.medications + "</strong></div>" if profile.medications else ""}
-            {"<div class='info-row'><span>Handicap</span><strong>" + profile.disabilities + "</strong></div>" if profile.disabilities else ""}
         </div>
 
         <div class="section">
             <h3>📞 Contacts d'urgence</h3>
-            {contacts_html if contacts_html else "<p style='color:#64748b;font-size:14px'>Aucun contact renseigné</p>"}
+            {contacts_html or "<p>Aucun contact</p>"}
         </div>
 
-        {vehicle_html}
-        {school_html}
-
-        <div class="pro-section">
-            <h3>🔐 Accès professionnel</h3>
-            <input class="pro-input" id="proCode" placeholder="Code unité (ex: POL1717)" maxlength="12">
-            <button class="pro-btn" onclick="unlockPro()">Déverrouiller l'accès complet</button>
-            <div id="proResult" style="margin-top:12px;color:#94a3b8;font-size:13px;text-align:center;"></div>
+        <div class="pro-box">
+            <h3>🔐 Accès Unité d'Urgence</h3>
+            <p style="font-size:12px; color:#94a3b8; margin-bottom:10px;">Réservé Police, SAMU, Sapeurs-Pompiers</p>
+            <input type="text" id="pinCode" class="pro-input" placeholder="Code Unité (ex: POL1717)">
+            <button class="pro-btn" onclick="verifyPro()">DÉVERROUILLER LES DONNÉES</button>
+            
+            <div id="proDetails" class="hidden-data">
+                <h4 style="color:#4ade80">✅ Accès Autorisé</h4>
+                <div id="medicalFull" style="font-size:14px; margin-top:10px; line-height:1.6"></div>
+            </div>
         </div>
     </div>
 
-    <div class="footer">SafeLife © 2026 — Fiche générée automatiquement<br>QR Token : {qr_token[:8]}...</div>
-
     <script>
-    async function unlockPro() {{
-        const code = document.getElementById('proCode').value.trim().toUpperCase();
-        const result = document.getElementById('proResult');
-        if (code.length < 4) {{ result.textContent = 'Code trop court'; return; }}
-        result.textContent = 'Vérification...';
+    async function verifyPro() {{
+        const pin = document.getElementById('pinCode').value.trim().toUpperCase();
+        const detailsBox = document.getElementById('proDetails');
+        const medicalFull = document.getElementById('medicalFull');
+        
         try {{
-            const res = await fetch('/scan/verify', {{
+            const response = await fetch('/scan/verify', {{
                 method: 'POST',
-                headers: {{'Content-Type': 'application/json'}},
-                body: JSON.stringify({{ token: '{qr_token}', pin: code, authority_type: 'web' }})
+                headers: {{ 'Content-Type': 'application/json' }},
+                body: JSON.stringify({{ token: '{qr_token}', pin: pin }})
             }});
-            const data = await res.json();
-            if (res.ok) {{
-                result.innerHTML = '<div style="color:#4ade80;font-weight:700">✅ Accès accordé — ' + data.authority + '</div><div style="color:white;margin-top:8px">Données complètes chargées</div>';
+            
+            const data = await response.json();
+            
+            if (response.ok) {{
+                detailsBox.style.display = 'block';
+                medicalFull.innerHTML = `
+                    <p><strong>Unité :</strong> ${{data.authority}}</p>
+                    <hr style="border:0; border-top:1px solid #334155; margin:10px 0">
+                    <p><strong>Allergies :</strong> ${{data.medical.allergies}}</p>
+                    <p><strong>Maladies :</strong> ${{data.medical.conditions}}</p>
+                    <p><strong>Médicaments :</strong> ${{data.medical.medications}}</p>
+                    <p><strong>Handicap :</strong> ${{data.medical.disabilities}}</p>
+                `;
+                document.getElementById('pinCode').style.display = 'none';
+                document.querySelector('.pro-btn').style.display = 'none';
             }} else {{
-                result.innerHTML = '<div style="color:#f87171">❌ ' + (data.detail || 'Code invalide') + '</div>';
+                alert(data.detail || "Code invalide");
             }}
-        }} catch(e) {{
-            result.textContent = 'Erreur de connexion';
+        }} catch (e) {{
+            alert("Erreur de connexion au serveur");
         }}
     }}
     </script>
 </body>
 </html>"""
     return HTMLResponse(content=html)
-
-
-# ─── POST /scan/verify ── Vérification code pro
 @router.post("/verify")
 def verify_scan(body: ScanVerifyRequest, db: Session = Depends(get_db)):
+    # Nettoyage strict
     clean_pin = body.pin.strip().upper()
-
+    
     profile = db.query(Profile).filter(Profile.qr_token == body.token).first()
     if not profile:
         raise HTTPException(status_code=404, detail="Profil introuvable")
 
+    # 1. Vérification codes maîtres (POL1717, AMBU1818, etc.)
     authority_name = MASTER_CODES.get(clean_pin)
+    
+    # 2. Vérification code personnel (si pas de code maître)
+    if not authority_name:
+        user_pin = str(getattr(profile, 'access_code', '1234')).strip().upper()
+        if clean_pin == user_pin:
+            authority_name = "Accès Privé (Code Personnel)"
 
     if not authority_name:
-        raise HTTPException(status_code=403, detail="Code d'accès invalide")
+        raise HTTPException(status_code=403, detail="CODE INVALIDE POUR CETTE UNITE")
 
     return {
         "status": "success",
         "authority": authority_name,
-        "identity": {
-            "first_name": profile.first_name,
-            "last_name": profile.last_name,
-            "birth_date": profile.birth_date,
-            "gender": profile.gender,
-            "nationality": profile.nationality,
-        },
         "medical": {
             "blood_type": profile.blood_type or "NC",
             "allergies": profile.allergies or "Aucune",
             "conditions": profile.conditions or "Aucune",
             "medications": profile.medications or "Aucun",
             "disabilities": profile.disabilities or "Aucun",
-        },
-        "vehicle": {
-            "has_vehicle": profile.has_vehicle,
-            "type": profile.vehicle_type,
-            "plate": profile.plate,
-            "brand": profile.brand,
-            "model": profile.model,
-        },
-        "emergency_contact": profile.emergency_contacts[0].phone if profile.emergency_contacts else "N/A",
-        "emergency_contacts": [
-            {"name": c.name, "phone": c.phone, "relation": c.relation}
-            for c in profile.emergency_contacts
-        ],
-        "audit": {
-            "authority": authority_name,
-            "token": body.token[:8] + "...",
         }
     }
