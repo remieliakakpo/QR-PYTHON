@@ -58,7 +58,7 @@ def unlock_profile(profile_id: str, access_code: str, db: Session = Depends(get_
 # --- 3. CRÉATION DU PROFIL ---
 @router.post("/", response_model=ProfileResponse, status_code=status.HTTP_201_CREATED)
 def create_profile(data: ProfileCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    if db.query(Profile).filter(Profile.user_id == current_user.id).first():
+    if db.query(Profile).filter(Profile.user_id == current_user).first():
         raise HTTPException(status_code=400, detail="Un profil existe déjà")
 
     profile = Profile(
