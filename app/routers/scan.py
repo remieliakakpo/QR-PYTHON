@@ -1,4 +1,12 @@
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import HTMLResponse
+from sqlalchemy.orm import Session
+from app.utils.database import get_db
+from app.models.models import Scan, Profile
+from pydantic import BaseModel
+import uuid
 # ─── POST /scan/verify ── Vérification ultra-robuste
+router = APIRouter()
 @router.post("/verify")
 def verify_scan(body: ScanVerifyRequest, db: Session = Depends(get_db)):
     # 1. Logs de débogage (Regarde tes logs Railway !)
