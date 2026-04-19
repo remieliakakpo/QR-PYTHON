@@ -10,7 +10,7 @@ import os
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # 2. PARAMÈTRES DU TOKEN (JWT)
-SECRET_KEY = "VOTRE_CLE_TRES_SECURISE_A_CHANGER" 
+SECRET_KEY = "UWrqR&jzVQp9Mavo/*26U" 
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_DAYS = 7
 
