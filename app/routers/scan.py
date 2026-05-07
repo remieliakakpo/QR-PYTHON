@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
-from sqlalchemy.orm import Session, joinedload # <--- AJOUTER joinedload ICI
+from sqlalchemy.orm import Session, joinedload
 from app.utils.database import get_db
 from app.models.models import Scan, Profile
 from pydantic import BaseModel
