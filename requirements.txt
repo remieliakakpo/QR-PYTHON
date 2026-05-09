@@ -10,3 +10,4 @@ alembic
 email-validator
 geoalchemy2  
 httpx
+PyJWT
