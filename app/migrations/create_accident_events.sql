@@ -28,5 +28,4 @@ CREATE INDEX IF NOT EXISTS idx_accidents_coords
 CREATE INDEX IF NOT EXISTS idx_accidents_timestamp 
     ON accident_events (timestamp DESC);
 
-CREATE INDEX IF NOT EXISTS idx_accidents_hotspot 
-    ON accident_events (is_hotspot) WHERE is_hotspot = TRUE;
+CREATE INDEX idx_is_hotspot ON accident_events (is_hotspot);

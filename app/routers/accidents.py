@@ -6,8 +6,7 @@ from typing import Optional, List
 from datetime import datetime, timedelta
 import httpx
 import math
-
-from app.database import get_db
+from ..database import get_db
 from ..models.accident import AccidentEvent
 from ..schemas.accident import (
     AccidentCreate, AccidentUpdate,

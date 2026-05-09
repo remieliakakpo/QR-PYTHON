@@ -4,6 +4,8 @@ from app.routers import scan, auth, profil
 from app.utils.database import engine
 from app.models import models
 from .routers import accidents
+from .routers import pro_auth
+
 
 import logging
 
@@ -30,6 +32,7 @@ app.include_router(auth.router,   prefix="/auth",   tags=["Auth"])
 app.include_router(profil.router, prefix="/profil", tags=["Profil"])
 app.include_router(scan.router,   prefix="/scan",   tags=["Scan"])
 app.include_router(accidents.router)
+app.include_router(pro_auth.router)
 
 @app.get("/")
 def read_root():
