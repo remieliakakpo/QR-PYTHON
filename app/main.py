@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import scan, auth, profil
 from app.utils.database import engine
-from app.models import models
+from app.database import get_db
 from .routers import accidents
 from .routers import pro_auth
 
