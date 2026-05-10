@@ -1,8 +1,25 @@
-from pydantic import BaseModel
-from typing import Optional
-from datetime import datetime
 import uuid
+from sqlalchemy import Column, String, Float, DateTime
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.sql import func
+from app.database import Base
 
+class AlerteEvent(Base):
+    __tablename__ = "alerte_events"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(String(255))
+    qr_token = Column(String(255))
+    prenom = Column(String(255), default="Inconnu")
+    nom = Column(String(255), default="")
+    groupe_sanguin = Column(String(10))
+    latitude = Column(Float, nullable=False)
+    longitude = Column(Float, nullable=False)
+    adresse = Column(String(500), default="Position GPS")
+    vehicle_type = Column(String(50), default="moto")
+    statut = Column(String(50), default="active")
+    timestamp = Column(DateTime(timezone=True), server_default=func.now())
+    resolved_at = Column(DateTime(timezone=True), nullable=True)
 class AccidentCreate(BaseModel):
     """Données envoyées automatiquement depuis l'app mobile au SOS"""
     latitude:     float

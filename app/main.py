@@ -1,13 +1,14 @@
 from fastapi import FastAPI
+from app.database import init_db
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import scan, auth, profil
-from app.utils.database import engine
+from app.utils.database import Base, engine
 from app.database import get_db
 from .routers import accidents
 from .routers import pro_auth
-
-
+from .routers import alertes
 import logging
+from app.models.accident import AlerteEvent
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -19,6 +20,14 @@ except Exception as e:
     logger.error(f"❌ Erreur DB : {e}")
 
 app = FastAPI(title="SafeLife API")
+
+@app.on_event("startup")
+async def startup_event():
+    logger.info("🚀 Démarrage de l'application SafeLife...")
+    init_db()
+    logger.info("✅ Base de données initialisée.")
+    Base.metadata.create_all(bind=engine)
+    logger.info("✅ Tables créées ou déjà existantes.")
 
 app.add_middleware(
     CORSMiddleware,
@@ -33,6 +42,7 @@ app.include_router(profil.router, prefix="/profil", tags=["Profil"])
 app.include_router(scan.router,   prefix="/scan",   tags=["Scan"])
 app.include_router(accidents.router)
 app.include_router(pro_auth.router)
+app.include_router(alertes.router)
 
 @app.get("/")
 def read_root():
