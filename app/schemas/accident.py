@@ -3,6 +3,7 @@ from sqlalchemy import Column, String, Float, DateTime
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 from app.database import Base
+from pydantic import BaseModel
 
 class AlerteEvent(Base):
     __tablename__ = "alerte_events"
