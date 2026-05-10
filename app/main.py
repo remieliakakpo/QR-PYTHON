@@ -2,8 +2,7 @@ from fastapi import FastAPI
 from app.database import init_db
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import scan, auth, profil
-from app.utils.database import Base, engine
-from app.database import get_db
+from app.database import engine, Base, get_db
 from .routers import accidents
 from .routers import pro_auth
 from .routers import alertes

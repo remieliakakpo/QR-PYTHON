@@ -17,6 +17,13 @@ def init_db():
     with open(sql_path, "r") as f:
         query = f.read()
     
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+            
     # On l'exécute
     with engine.connect() as connection:
         transaction = connection.begin()
