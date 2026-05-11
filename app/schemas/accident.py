@@ -5,6 +5,7 @@ from sqlalchemy.sql import func
 from app.database import Base
 from pydantic import BaseModel
 from typing import Optional, List
+from datetime import datetime
 
 class AlerteEvent(Base):
     __tablename__ = "alerte_events"
