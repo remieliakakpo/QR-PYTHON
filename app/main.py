@@ -7,8 +7,7 @@ from .routers import accidents
 from .routers import pro_auth
 from .routers import alertes
 import logging
-from app.models.accident import AlerteEvent
-
+from app.routers.alertes import AlerteEvent
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
