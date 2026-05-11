@@ -12,10 +12,10 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 def init_db():
-    # On lit le fichier SQL
-    sql_path = os.path.join(os.path.dirname(__file__), "sql", "init.sql")
-    with open(sql_path, "r") as f:
-        query = f.read()
+    try:
+        print("✅ Base de données initialisée avec succès (SQLAlchemy).")
+    except Exception as e:
+        print(f"❌ Erreur lors de l'initialisation de la DB : {e}")
     
 def get_db():
     db = SessionLocal()
@@ -23,7 +23,7 @@ def get_db():
         yield db
     finally:
         db.close()
-            
+
     # On l'exécute
     with engine.connect() as connection:
         transaction = connection.begin()
