@@ -5,7 +5,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 from pydantic import BaseModel
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 import json
 import enum
@@ -22,6 +22,8 @@ class StatutAlerte(str, enum.Enum):
 
 class AlerteEvent(Base):
     __tablename__ = "alerte_events"
+    # CORRECTIF RAILWAY : Évite l'erreur "Table already defined" au redémarrage
+    __table_args__ = {'extend_existing': True} 
 
     id             = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id        = Column(String, nullable=True)
@@ -56,11 +58,9 @@ class AlerteUpdate(BaseModel):
 
 # ════════════════════════════════════════════════════════════
 # GESTIONNAIRE WEBSOCKET
-# Garde en mémoire tous les dashboards connectés
 # ════════════════════════════════════════════════════════════
 class ConnectionManager:
     def __init__(self):
-        # Liste de tous les dashboards Pro connectés
         self.active_connections: List[WebSocket] = []
 
     async def connect(self, websocket: WebSocket):
@@ -69,11 +69,11 @@ class ConnectionManager:
         print(f"✅ Dashboard connecté. Total: {len(self.active_connections)}")
 
     def disconnect(self, websocket: WebSocket):
-        self.active_connections.remove(websocket)
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
         print(f"❌ Dashboard déconnecté. Total: {len(self.active_connections)}")
 
     async def broadcast(self, message: dict):
-        """Envoie un message à TOUS les dashboards connectés"""
         data = json.dumps(message, default=str)
         disconnected = []
         for connection in self.active_connections:
@@ -81,48 +81,29 @@ class ConnectionManager:
                 await connection.send_text(data)
             except Exception:
                 disconnected.append(connection)
-        # Nettoyer les connexions mortes
         for conn in disconnected:
-            self.active_connections.remove(conn)
+            if conn in self.active_connections:
+                self.active_connections.remove(conn)
 
-# Instance globale — partagée entre tous les endpoints
 manager = ConnectionManager()
 
 # ════════════════════════════════════════════════════════════
 # ENDPOINTS
 # ════════════════════════════════════════════════════════════
 
-# ─── WebSocket — le dashboard s'y connecte ───────────────────
 @router.websocket("/ws/alertes")
 async def websocket_alertes(websocket: WebSocket):
-    """
-    Le dashboard safelife-pro se connecte ici.
-    Il reste connecté et reçoit les alertes en temps réel.
-    """
     await manager.connect(websocket)
     try:
-        # Garder la connexion ouverte indéfiniment
         while True:
-            # On attend des messages du dashboard (ex: ping)
             data = await websocket.receive_text()
-            # Répondre au ping pour garder la connexion vivante
             if data == "ping":
                 await websocket.send_text("pong")
     except WebSocketDisconnect:
         manager.disconnect(websocket)
 
-# ─── POST /alertes — déclenché par l'app mobile au SOS ───────
 @router.post("/alertes")
-async def create_alerte(
-    data: AlerteCreate,
-    db: Session = Depends(get_db)
-):
-    """
-    Appelé automatiquement depuis l'app mobile quand SOS est déclenché.
-    1. Sauvegarde en base de données
-    2. Broadcast WebSocket à tous les dashboards connectés
-    """
-    # 1. Sauvegarder l'alerte
+async def create_alerte(data: AlerteCreate, db: Session = Depends(get_db)):
     alerte = AlerteEvent(
         user_id        = data.user_id,
         qr_token       = data.qr_token,
@@ -140,9 +121,8 @@ async def create_alerte(
     db.commit()
     db.refresh(alerte)
 
-    # 2. Broadcaster à tous les dashboards en temps réel
     message = {
-        "type":           "NOUVELLE_ALERTE",  # ← le dashboard écoute ce type
+        "type":           "NOUVELLE_ALERTE",
         "id":             str(alerte.id),
         "prenom":         alerte.prenom,
         "nom":            alerte.nom,
@@ -158,10 +138,8 @@ async def create_alerte(
         "contacts":       [],
     }
     await manager.broadcast(message)
-
     return {"success": True, "alerte_id": str(alerte.id)}
 
-# ─── GET /alertes — liste des alertes actives ────────────────
 @router.get("/alertes")
 def get_alertes(db: Session = Depends(get_db)):
     alertes = db.query(AlerteEvent).filter(
@@ -169,8 +147,11 @@ def get_alertes(db: Session = Depends(get_db)):
     ).order_by(AlerteEvent.timestamp.desc()).all()
 
     result = []
+    now = datetime.now(timezone.utc)
     for a in alertes:
-        minutes = int((datetime.now() - a.timestamp.replace(tzinfo=None)).total_seconds() / 60)
+        # Calcul propre du temps écoulé
+        diff = now - a.timestamp.replace(tzinfo=timezone.utc) if a.timestamp.tzinfo else now - a.timestamp
+        minutes = int(diff.total_seconds() / 60)
         result.append({
             "id":             str(a.id),
             "prenom":         a.prenom,
@@ -186,50 +167,23 @@ def get_alertes(db: Session = Depends(get_db)):
             "minutes_ecoulees": max(0, minutes),
             "contacts":       [],
         })
-    return {"alertes": result}
+    return result # Retourne directement la liste pour matcher avec ton frontend
 
-# ─── PUT /alertes/{id}/prendre-en-charge ─────────────────────
 @router.put("/alertes/{alerte_id}/prendre-en-charge")
-async def prendre_en_charge(
-    alerte_id: str,
-    db: Session = Depends(get_db)
-):
-    alerte = db.query(AlerteEvent).filter(
-        AlerteEvent.id == alerte_id
-    ).first()
-    if not alerte:
-        return {"error": "Alerte introuvable"}
-
+async def prendre_en_charge(alerte_id: str, db: Session = Depends(get_db)):
+    alerte = db.query(AlerteEvent).filter(AlerteEvent.id == alerte_id).first()
+    if not alerte: return {"error": "Alerte introuvable"}
     alerte.statut = "en_cours"
     db.commit()
-
-    # Notifier tous les dashboards
-    await manager.broadcast({
-        "type":      "ALERTE_MISE_A_JOUR",
-        "id":        alerte_id,
-        "statut":    "en_cours",
-    })
+    await manager.broadcast({"type": "ALERTE_MISE_A_JOUR", "id": alerte_id, "statut": "en_cours"})
     return {"success": True}
 
-# ─── PUT /alertes/{id}/resoudre ──────────────────────────────
 @router.put("/alertes/{alerte_id}/resoudre")
-async def resoudre_alerte(
-    alerte_id: str,
-    db: Session = Depends(get_db)
-):
-    alerte = db.query(AlerteEvent).filter(
-        AlerteEvent.id == alerte_id
-    ).first()
-    if not alerte:
-        return {"error": "Alerte introuvable"}
-
-    alerte.statut    = "resolue"
-    alerte.resolved_at = datetime.now()
+async def resoudre_alerte(alerte_id: str, db: Session = Depends(get_db)):
+    alerte = db.query(AlerteEvent).filter(AlerteEvent.id == alerte_id).first()
+    if not alerte: return {"error": "Alerte introuvable"}
+    alerte.statut = "resolue"
+    alerte.resolved_at = datetime.now(timezone.utc)
     db.commit()
-
-    await manager.broadcast({
-        "type":   "ALERTE_RESOLUE",
-        "id":     alerte_id,
-        "statut": "resolue",
-    })
+    await manager.broadcast({"type": "ALERTE_RESOLUE", "id": alerte_id, "statut": "resolue"})
     return {"success": True}
